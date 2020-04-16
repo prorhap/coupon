@@ -5,27 +5,33 @@
 * Kafka, DynamoDB, ElasticSearch, Memcached
  
 
-## 개발 방향
-coupon-simple 프로젝트에서 hibernate를 사용해서 심플한 구현을 생각했다면, 여기서는 대용량 서비스를 고려합니다.
-대용량 시스템을 구성한다면 이런 방향으로 구성할 수 있다는 모습을 보여드리고, prototype 수준 정도만 구현했습니다.   
+## 개발 방향 및 문제 해결 전략
+coupon-simple 프로젝트에서 hibernate를 사용해서 심플한 구현을 했다면, 이곳에서는 대용량 처리를 고민한 구조를 보여드리고 prototype 수준의 정도만 구현했습니다. 아키텍처 설계 시 몇 가지 가정을 하고 구현을 했고 이에 대한 사항은 아래에서 이야기합니다. (아키텍처는 trade-off를 생각해야하고 비즈니스의 완성도를 생각하면 너무 복잡해져서 단순하게 API의 기능정도 제공한다는 생각으로 설계/구현했습니다.)
 
-쿠폰 조회를 제외한 요청을 먼저 queue (kafka)에 넣고 이를 consuming 하면서 필요한 일을 처리합니다. 요청이 들어오면 memcached에서 정보를 조회 후 빠르게 validation 정도만 수행하고 이를 통과하면 kafka 에 저장합니다. 
-그리고 kafka 에 저장된 값을 읽어서 뒤에서 해당 처리를 위한 비즈니스를 수행합니다.
+기본 방향
+* 대부분의 쿠폰 관련 비즈니스는 (1) 요청을 받아 유효성 체크 등의 간단한 로직이 있는 REST API 서버 (2) 고성능 메시지 큐 용도의 Kafka (3) 메인 비즈니스 처리를 위한 Consumer 어플리케이션 (4) 대량의 데이터를 안정적으로 저장/처리하기 위한 key, value 저장소인 DynamoDB, 그리고 (1) REST API 서버에서 빠르 처리를 돕기 위한 Memcache를 통해서 수행합니다.
+* 각종 조건에 대한 조회/검색은 별도의 조회용 데이터 저장소를 이용해서 수행합니다. 여기서는 ElasticSearch를 사용했고 MongoDB도 사용에 적합해보입니다.
 
 주요 구성 요소
-* PlayFramework: non-blocking 서버
-* Kafka: 메시지 큐 역할로 Redis를 사용할 수도 있습니다. 쿠폰은 돈에 관련된거라 data persistence의 신뢰성에 점수를 더 줘서 kafka를 사용했습니다.
-* DynamoDB: 쿠폰 생성, 발행, 사용 처리를 위한 메인 DB로 쿠폰 코드를 key로 하는 대용량 데이터 저장소 입니다. 가용성이 아주 높고 데이터 양이 늘어나도 write, read 성능 영향도가 낮습니다. 
-* ElasticSearch: 각종 조건에 따라 조회를 위한 데이터 검색 시스템 입니다. Kafka에 저장된 메시지를 처리하면서 (적절히 가공해) ElasticSearch 쪽으로 데이터를 저장합니다. (ElasticSearch 대신 MongoDB를 사용해도 될 것 같습니다.)
+* PlayFramework: 많은 요청 처리에 조금 더 적합한 non-blocking REST API 서버
+* Kafka: 메시지 큐 역할로 Redis를 사용할 수도 있습니다. 쿠폰 처리는 돈에 관계된 부분이라 Data Persistence에 점수를 더 줘서 Kafka를 사용했습니다.
+* DynamoDB: 쿠폰 생성, 발행, 사용 처리를 위한 메인 DB로 쿠폰 코드를 key로 하는 대용량 데이터 저장소 입니다. 빠르고 가용서 높은, 데이터가 많이 늘어나도 write, read 성능 영향도가 낮은 KeyValue 저장소 입니다.
+* ElasticSearch: 각종 조건에 따른 조회를 위한 조회/검색 시스템 입니다. Kafka에 저장된 메시지를 처리하면서 (필요하다면 적절히 가공해) ElasticSearch 쪽으로 데이터를 저장합니다. MongoDB도 이 역할에 적합합니다.
 * Memcached: Kafka에 저장하기 전에 validation을 위한 데이터 조회 등의 목적으로 사용합니다. 여기에 데이터가 없을 경우에는 DynamoDB에서 읽어옵니다.  
 
 참고
-* 사람(human)이 일반적인 형태로 쿠폰 관련된 일을 수행 한다고 가정했습니다. (즉 아주 짧은 시간안에 해당 쿠폰 관련된 요청이 들어오지 않음) 이 문제는 kafka에 쓰기 전에 memcache에 먼저 쓴 후 kafka에 데이터를 저장하는 형태로 해결할 수 있습니다.  
-* 대량의 트래픽을 고려하라고 해서 쿠폰발행과 쿠폰사용 등에 대해 각각을 좀 더 유연하게 고려할 수 있도록 별도의 topic으로 구성했습니다. 
-* 만약 쿠폰 이벤트 종류에 따른 운영 편의성보다 타이밍 이슈가 중요하다면, 쿠폰 업데이트 관련 이벤트를 하나의 topic으로 구성하고 각 이벤트의 타입을 명시적으로 표현할 수 있습니다. 이렇게 구성하면, 쿠폰 코드를 partition key로 사용하기 때문에 타이밍 문제에 덜 민감하게되고 특정 topic이 밀리면서 발생하는 문제를 피할 수 있습니다.   
+* 사람이 일반적인 형태로 쿠폰 관련된 일을 수행 한다고 가정했습니다. 요청을 consuming 해서 처리하기 전에, 문제가 될 만한 요청이 들어오는 것을 막으 필요가 있다면 Memcached 에도 해당 사항을 함께 업데이트 할 수 있습니다.
+* 요구사항에 기술된 대용량 트래픽이라면, 쿠폰발행/쿠폰사용 등이 각각 특정 시간에 (순간적으로) 집중되는 상황이라고 가정해서, 이를 좀 더 유연하게 운영 할 수 있도록  쿠폰발행/쿠폰사용 등의 요청 타입을 각각 별도의 topic으로 구성했습니다. - topic 별로 partition을 조정하고 consumer를 늘려서 backpresure 가 발생하지 않도록 
+* 만약 쿠폰 이벤트 종류에 따라 topic으 나눠 운영하는 것 보다 타이밍 이슈가 중요하다면, 쿠폰 업데이트 관련 이벤트를 하나의 topic으로 구성하고 각 이벤트의 타입을 명시적으로 표현해서 메시지르 처리할 수 있습니다. 이렇게 구성하면, 쿠폰 코드를 partition key로 사용하기 때문에 쿠폰 코드가 같은 이벤트에 대해서는 처리 순서가 보장되기 때문에, 타이밍 문제에 덜 민감하게 되고 또한 특정 topic이 밀리면서 발생하는 문제(예를들어 쿠폰 발급은 많이 지연되면서 쿠폰 취소를 먼저 처리하 수 있는 상황 등)를 피할 수 있습니다.   
+* CVS Import는 쿠폰을 발행하는 상황이라고 가정했습니다. 
  
 
 ## 환경 설정
+아래에 대한 환경을 준비한다.
+* elasticsearch 설치 및 실행 후 index 생성
+* dynamodb local 버전 받아서 실행 후 table 생성
+* memcached 설치 후 실행
+* kafka 설치 후 실행
 
 ```bash
 # elasticsearch 받기
@@ -76,9 +82,10 @@ aws dynamodb create-table \
 
 aws dynamodb list-tables --endpoint-url http://localhost:8000
 ```
+Dynamodb Local 버전은 프로세스를 내리면 데이터가 날아감 
 
 ```
-# memcached 실행
+# memcached 설치 후 실행
 ```
 
 ```bash
@@ -111,36 +118,13 @@ cd coupon-1.0.0
 # consummer application 실행
 java -cp $(echo lib/*.jar | tr ' ' ':') com.github.prorhap.coupon.play.app.CouponApplication
 
-# cvs importer 실행
-java -cp $(echo lib/*.jar | tr ' ' ':') com.github.prorhap.coupon.play.app.CvsImporter /Users/rhapsody/Dropbox/Project/coupon/conf/data.cvs com.github.prorhap.coupon.play.app.CouponApplication
+# cvs importer 실행  
+java -cp $(echo lib/*.jar | tr ' ' ':') com.github.prorhap.coupon.play.app.CvsImporter <file-path> 
+
 
 ```
-
-
-For best results, start the gatling load test up on another machine so you do not have contending resources.  You can edit the [Gatling simulation](http://gatling.io/docs/2.3/general/simulation_structure.html#simulation-structure), and change the numbers as appropriate.
-
-Once the test completes, you'll see an HTML file containing the load test chart, for example:
-
-```bash
- ./play-java-rest-api-example/target/gatling/gatlingspec-1472579540405/index.html
+cvs importer의 cvs 파일 포멧은 couponCode, validFrom, expireAt 이고, 예를들면 아래와 같은 형태이다.
+``` 
+26DWGQ9JRO20N55I8ZC, 20200401, 20200420
+1W5E5OFG0B16B9CCBG3, 20200401, 20200420
 ```
-
-That will contain your load test results.
-
-
-
-
-## Best Practices for Blocking API
-
-If you look at the controller: [PostController](app/v1/post/PostController.java)
-then you can see that when calling out to a blocking API like JDBC, you should put it behind an asynchronous boundary -- in practice, this means using the CompletionStage API to make sure that you're not blocking the rendering thread while the database call is going on in the background.
-
-
-
-There is more detail in <https://www.playframework.com/documentation/latest/ThreadPools> -- notably, you can always bump up the number of threads in the rendering thread pool rather than do this -- but it gives you an idea of best practices.
-
-## Load Testing
-
-The best way to see what Play can do is to run a load test.  We've included Gatling in this test project for integrated load testing.
-
-Start Play in production mode, by [staging the application](https://www.playframework.com/documentation/latest/Deploying) and running the play script:s
