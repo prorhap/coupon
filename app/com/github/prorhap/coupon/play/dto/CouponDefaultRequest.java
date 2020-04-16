@@ -10,4 +10,8 @@ import lombok.Setter;
 public class CouponDefaultRequest {
 
     private String couponCode;
+
+    public CouponDefaultRequest(String couponCode) {
+        this.couponCode = couponCode;
+    }
 }
