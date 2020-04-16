@@ -1,0 +1,9 @@
+POST        /v1/coupons                      com.github.prorhap.coupon.play.api.controller.CouponController.create(request:Request)
+PUT         /v1/coupons/issue                com.github.prorhap.coupon.play.api.controller.CouponController.issue(request:Request)
+PUT         /v1/coupons/use                  com.github.prorhap.coupon.play.api.controller.CouponController.use(request:Request)
+PUT         /v1/coupons/cancel               com.github.prorhap.coupon.play.api.controller.CouponController.cancel(request:Request)
+GET         /v1/coupons/expired/today        com.github.prorhap.coupon.play.api.controller.CouponController.getCouponsExpiredToday()
+
+GET         /v1/users/:userId/coupons        com.github.prorhap.coupon.play.api.controller.UserController.get(userId: String)
+
+#->     /v1/posts                    posts.Routes
