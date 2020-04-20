@@ -27,8 +27,8 @@ lazy val root = (project in file("."))
       "org.apache.kafka" % "kafka-clients" % "2.4.1",
       "io.searchbox" % "jest" % "6.3.1",
       "software.amazon.awssdk" % "dynamodb" % "2.10.91",
-      "junit" % "junit" % "4.13" % Test
-
+      "junit" % "junit" % "4.13" % Test,
+      "org.exparity" % "hamcrest-date" % "2.0.7" % Test
     ),
     PlayKeys.externalizeResources := false,
     testOptions in Test := Seq(Tests.Argument(TestFrameworks.JUnit, "-a", "-v")),

@@ -10,6 +10,10 @@ public class CouponCodeSerializer extends JsonSerializer<String> {
 
     @Override
     public void serialize(String value, JsonGenerator jsonGenerator, SerializerProvider serializers) throws IOException {
-        jsonGenerator.writeString(new StringBuffer(value).insert(11, '-').insert(5, '-').toString());
+        try {
+            jsonGenerator.writeString(new StringBuffer(value).insert(11, '-').insert(5, '-').toString());
+        }catch (RuntimeException e) {
+            throw new RuntimeException("Illegal coupon code length = "+value);
+        }
     }
 }
