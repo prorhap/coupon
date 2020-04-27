@@ -51,7 +51,7 @@ docker run -p 9200:9200 -p 9300:9300 -e “discovery.type=single-node” docker.
 
 # index 생성
 curl -X PUT \
-  http://localhost:9200/coupon \
+  http://localhost:9200/coupon1 \
   -H 'Content-Type: application/json' \
   -H 'cache-control: no-cache' \
   -d '{
