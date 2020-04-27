@@ -50,8 +50,11 @@ docker pull docker.elastic.co/elasticsearch/elasticsearch:6.8.8
 docker run -p 9200:9200 -p 9300:9300 -e “discovery.type=single-node” docker.elastic.co/elasticsearch/elasticsearch:6.8.8
 
 # index 생성
-PUT /coupon
-{
+curl -X PUT \
+  http://localhost:9200/coupon \
+  -H 'Content-Type: application/json' \
+  -H 'cache-control: no-cache' \
+  -d '{
   "mappings": {
   	"_doc" : {
 	    "properties": {
@@ -68,7 +71,7 @@ PUT /coupon
 	    }
 	  }
   }
-}
+}'
 ```
 
 ```bash
